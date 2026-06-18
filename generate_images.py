@@ -6,14 +6,22 @@ Generates all 14 reference images using FAL AI
 
 import os
 import json
+import urllib.request
 from pathlib import Path
 import fal_client
 
-# FAL AI Configuration
-FAL_API_KEY = os.getenv("FAL_API_KEY")
+# FAL AI Configuration.
+# fal_client authenticates via the FAL_KEY env var. Accept FAL_API_KEY as a
+# convenience alias and normalize it to FAL_KEY so the client can see it.
+FAL_KEY = os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY")
 
-if not FAL_API_KEY:
-    raise ValueError("❌ FAL_API_KEY environment variable not set. Set it and try again.")
+if not FAL_KEY:
+    raise ValueError(
+        "❌ No API key found. Set FAL_KEY (or FAL_API_KEY) and try again.\n"
+        '   PowerShell:  $env:FAL_KEY = "your_key_here"'
+    )
+
+os.environ["FAL_KEY"] = FAL_KEY
 
 # Reference images directory
 OUTPUT_DIR = Path("reference-images")
@@ -264,33 +272,34 @@ No distracting elements, clear CTA hierarchy.
 ]
 
 # FAL AI Model Configuration
-MODEL_ID = "fal-ai/flux-pro"  # High quality image generation
+# Valid endpoint for the hosted high-quality FLUX Pro model.
+MODEL_ID = "fal-ai/flux-pro/v1.1"
 
 def generate_image(prompt_text: str, name: str) -> str:
-    """Generate a single image using FAL AI"""
+    """Generate a single image with FAL AI and download it to OUTPUT_DIR.
+
+    Returns the remote image URL on success, or None on failure.
+    """
     print(f"🎨 Generating: {name}")
 
     try:
-        result = fal_client.run(
+        # subscribe() blocks until the job finishes and surfaces queue progress.
+        result = fal_client.subscribe(
             MODEL_ID,
             arguments={
                 "prompt": prompt_text,
                 "image_size": "landscape_16_9",  # 16:9 aspect ratio
-                "num_inference_steps": 50,  # High quality
-                "enable_safety_checker": False,  # Trust our safe prompts
+                "output_format": "png",
             },
         )
 
-        # Download and save image
         image_url = result["images"][0]["url"]
 
-        # Save with FAL AI (returns local path)
+        # Actually download the file to disk.
         output_path = OUTPUT_DIR / f"{name}.png"
+        urllib.request.urlretrieve(image_url, output_path)
 
-        # For this, we'll save the URL to a manifest file
-        print(f"✅ Generated: {name}")
-        print(f"   URL: {image_url}\n")
-
+        print(f"✅ Saved: {output_path}\n")
         return image_url
 
     except Exception as e:

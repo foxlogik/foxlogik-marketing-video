@@ -1,0 +1,9 @@
+# Node
+node_modules/
+
+# Generated output
+reference-images/
+
+# Env / secrets
+.env
+*.key
